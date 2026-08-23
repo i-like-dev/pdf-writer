@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>文件填寫系統</title>
+    <title>檔案填寫與下載</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.js"></script>
@@ -10,7 +10,7 @@
 <body class="bg-gray-50 p-6">
     <div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-md">
         <h1 class="text-2xl font-bold mb-2 text-gray-800">請填寫表單內容</h1>
-        <p id="loadingStatus" class="text-sm text-gray-500 mb-6">正在載入表單設定...</p>
+        <p id="loadingStatus" class="text-sm text-gray-500 mb-6">正在初始化表單...</p>
         
         <div id="formContainer" class="space-y-4 mb-6">
             <!-- 動態生成輸入框 -->
@@ -32,11 +32,9 @@
             }
 
             try {
-                // 1. 解碼 Base64 Token
                 const jsonString = decodeURIComponent(escape(atob(token)));
                 configData = JSON.parse(jsonString);
 
-                // 2. 動態產生輸入欄位
                 const container = document.getElementById('formContainer');
                 container.innerHTML = '';
                 
@@ -49,16 +47,15 @@
                     container.appendChild(div);
                 });
 
-                document.getElementById('loadingStatus').innerText = `已成功載入模板，共 ${configData.fields.length} 個欄位。`;
+                document.getElementById('loadingStatus').innerText = `已載入模板，共需填寫 ${configData.fields.length} 個欄位。`;
                 
-                // 啟用按鈕
                 const btn = document.getElementById('submitBtn');
                 btn.disabled = false;
                 btn.className = "w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 cursor-pointer";
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗，連結可能損毀。';
+                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗。';
             }
         };
 
@@ -67,42 +64,41 @@
 
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerText = '處理中，請稍候...';
+            btn.innerText = '正在處理並產生 PDF...';
 
             try {
-                // 1. 從你的伺服器上下載原始 PDF 檔案
-                // （注意：如果你的伺服器與 GitHub Pages 有跨域 CORS 問題，請確保伺服器有允許跨域請求，或直接放在同源空間）
+                // 從你的伺服器下載遠端 PDF
                 const response = await fetch(configData.url);
-                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案');
+                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案，請檢查網址或 CORS 設定');
                 const pdfBytes = await response.arrayBuffer();
                 
-                // 2. 載入 PDF
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 pdfDoc.registerFontkit(fontkit);
                 
-                // 載入中文字型（Noto Sans TC，確保中文不會變亂碼）
+                // 載入開源中文字型（Noto Sans TC），防止中文變成亂碼
                 const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
                 const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
                 const customFont = await pdfDoc.embedFont(fontBytes);
 
                 const pages = pdfDoc.getPages();
 
-                // 3. 填入訪客輸入的文字
+                // 填入對應座標
                 configData.fields.forEach((field, index) => {
                     const value = document.getElementById(`input-${index}`).value;
                     const page = pages[field.page];
                     
                     if (page) {
+                        // PDF-lib 座標系統 Y 軸由下往上，需以頁面高度減去點擊的 Y 座標
                         page.drawText(value, {
                             x: field.x,
-                            y: page.getHeight() - field.y, // 轉換 PDF 座標系（由下往上）
-                            size: 12,
+                            y: page.getHeight() - field.y,
+                            size: 11,
                             font: customFont,
                         });
                     }
                 });
 
-                // 4. 匯出並觸發下載
+                // 下載成品
                 const modifiedPdfBytes = await pdfDoc.save();
                 const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
@@ -115,7 +111,7 @@
 
             } catch (error) {
                 console.error(error);
-                alert('產生 PDF 時發生錯誤！請檢查主控台訊息（可能是伺服器未開啟 CORS 權限）。');
+                alert('發生錯誤：' + error.message);
                 btn.disabled = false;
                 btn.innerText = '產出並下載 PDF';
             }
