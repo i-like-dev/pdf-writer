@@ -32,6 +32,7 @@
             }
 
             try {
+                // 手動 Base64 解密
                 const jsonString = decodeURIComponent(escape(atob(token)));
                 configData = JSON.parse(jsonString);
 
@@ -55,7 +56,7 @@
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗。';
+                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗（請確認是否有確實進行 Base64 加密）。';
             }
         };
 
@@ -67,7 +68,6 @@
             btn.innerText = '正在處理並產生 PDF...';
 
             try {
-                // 從你的伺服器下載遠端 PDF
                 const response = await fetch(configData.url);
                 if (!response.ok) throw new Error('無法下載遠端 PDF 檔案，請檢查網址或 CORS 設定');
                 const pdfBytes = await response.arrayBuffer();
@@ -75,20 +75,18 @@
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 pdfDoc.registerFontkit(fontkit);
                 
-                // 載入開源中文字型（Noto Sans TC），防止中文變成亂碼
+                // 載入開源中文字型防止亂碼
                 const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
                 const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
                 const customFont = await pdfDoc.embedFont(fontBytes);
 
                 const pages = pdfDoc.getPages();
 
-                // 填入對應座標
                 configData.fields.forEach((field, index) => {
                     const value = document.getElementById(`input-${index}`).value;
                     const page = pages[field.page];
                     
                     if (page) {
-                        // PDF-lib 座標系統 Y 軸由下往上，需以頁面高度減去點擊的 Y 座標
                         page.drawText(value, {
                             x: field.x,
                             y: page.getHeight() - field.y,
@@ -98,7 +96,6 @@
                     }
                 });
 
-                // 下載成品
                 const modifiedPdfBytes = await pdfDoc.save();
                 const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
