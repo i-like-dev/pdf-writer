@@ -2,22 +2,19 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>PDF 模板編輯與打包工具</title>
+    <title>PDF 專業表單模板產生器</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF.js 用於前端預覽與點擊 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     </script>
-    <!-- pdf-lib 用於將設定寫入 PDF 檔案中 -->
-    <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
-    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
         
         <!-- 左側控制面板 -->
         <div class="bg-white p-6 rounded-xl shadow-md md:col-span-1 space-y-4">
-            <h1 class="text-xl font-bold text-gray-800">1. PDF 模板編輯器</h1>
+            <h1 class="text-xl font-bold text-gray-800">1. PDF 表單欄位設計器</h1>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">上傳原始 PDF 檔案</label>
@@ -25,33 +22,33 @@
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">2. 未來伺服器上的檔案名稱/網址</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">2. 伺服器上的檔案公開網址 (URL)</label>
                 <input type="text" id="targetUrl" placeholder="https://example.com/form-template.pdf" class="w-full p-2 border rounded-lg text-sm">
-                <p class="text-xs text-gray-400 mt-1">此網址會與座標一起被加密到 Token 中。</p>
             </div>
 
             <hr>
 
             <div>
-                <h2 class="text-md font-semibold mb-2">3. 已標註的欄位列表</h2>
-                <div id="fieldsList" class="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    <p class="text-xs text-gray-400">尚未新增欄位，請在右側 PDF 畫面上點擊。</p>
+                <h2 class="text-md font-semibold mb-2">3. 已建立的欄位清單</h2>
+                <div id="fieldsList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    <p class="text-xs text-gray-400">尚未新增欄位，請在右側 PDF 畫面上點擊想放置文字的位置。</p>
                 </div>
             </div>
 
             <hr>
 
-            <button onclick="downloadTemplateAndConfig()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">下載帶有設定的 PDF 模板</button>
+            <button onclick="downloadTemplateAndConfig()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">下載 PDF 模板並產生設定</button>
             
             <div id="resultSection" class="hidden space-y-2 bg-gray-50 p-3 rounded border">
-                <label class="block text-xs font-bold text-gray-700">對應的 Token 字串（供手動 Base64 轉換使用）：</label>
-                <textarea id="rawJsonText" readonly class="w-full p-2 border rounded bg-white text-[10px] h-16 font-mono"></textarea>
+                <label class="block text-xs font-bold text-gray-700">對應的 Token JSON（請手動 Base64 加密）：</label>
+                <textarea id="rawJsonText" readonly class="w-full p-2 border rounded bg-white text-[10px] h-20 font-mono"></textarea>
             </div>
         </div>
 
-        <!-- 右側 PDF 預覽與標註區 -->
-        <div class="bg-white p-6 rounded-xl shadow-md md:col-span-2 flex flex-col items-center overflow-auto min-h-[600px]">
-            <h2 class="text-md font-semibold text-gray-700 mb-2 self-start">4. 點擊 PDF 頁面來標註填寫位置</h2>
+        <!-- 右側 PDF 預覽與框線標註區 -->
+        <div class="bg-white p-6 rounded-xl shadow-md md:col-span-2 flex flex-col items-center overflow-auto min-h-[700px]">
+            <h2 class="text-md font-semibold text-gray-700 mb-2 self-start">4. 點擊 PDF 頁面來建立欄位框線</h2>
+            <p class="text-xs text-gray-500 mb-3 self-start">提示：點擊畫布後，可選擇「一般文字」、「下拉選單」或「自動帶入日期」。</p>
             <div id="pdfContainer" class="relative border shadow-inner bg-gray-200 cursor-crosshair">
                 <p id="placeholderText" class="text-gray-400 p-20">請先在左側上傳 PDF 以顯示預覽</p>
                 <canvas id="pdfCanvas"></canvas>
@@ -63,7 +60,7 @@
     <script>
         let pdfDocJs = null;
         let originalArrayBuffer = null;
-        let scale = 1.2;
+        let scale = 1.3;
         let fields = [];
         let currentPdfPage = 1;
 
@@ -73,7 +70,6 @@
 
             originalArrayBuffer = await file.arrayBuffer();
             const typedarray = new Uint8Array(originalArrayBuffer);
-            
             pdfDocJs = await pdfjsLib.getDocument(typedarray).promise;
             document.getElementById('placeholderText').style.display = 'none';
             renderPage(currentPdfPage);
@@ -87,11 +83,11 @@
             
             canvas.height = viewport.height;
             canvas.width = viewport.width;
-
             await page.render({ canvasContext: context, viewport: viewport }).promise;
+            redrawMarkers();
         }
 
-        // 點擊畫布取得點位
+        // 點擊畫布新增欄位
         document.getElementById('pdfCanvas').addEventListener('click', function(event) {
             if (!pdfDocJs) return;
 
@@ -99,20 +95,39 @@
             const clickX = event.clientX - rect.left;
             const clickY = event.clientY - rect.top;
 
-            const fieldName = prompt("請輸入這個欄位的名稱（例如：姓名、電話）：");
+            const fieldName = prompt("請輸入這個欄位的名稱（例如：客戶姓名、簽約日期）：");
             if (!fieldName) return;
+
+            // 選擇欄位類型
+            const typeChoice = prompt("請選擇欄位類型：\n1. 一般手動輸入文字 (text)\n2. 下拉選單選擇 (select)\n3. 自動帶入當前日期 (date)", "1");
+            let type = "text";
+            let options = [];
+
+            if (typeChoice === "2") {
+                type = "select";
+                const optsStr = prompt("請輸入下拉選項，以逗號分隔（例如：選項A,選項B,選項C）：", "選項1,選項2");
+                if (optsStr) {
+                    options = optsStr.split(",").map(s => s.trim());
+                }
+            } else if (typeChoice === "3") {
+                type = "date";
+            }
 
             fields.push({
                 key: fieldName,
+                type: type,
+                options: options,
                 x: Math.round(clickX / scale),
                 y: Math.round(clickY / scale),
+                width: 150, // 預設欄位寬度
+                height: 24,  // 預設欄位高度
                 page: currentPdfPage - 1
             });
 
-            updateFieldsUI();
+            redrawMarkers();
         });
 
-        function updateFieldsUI() {
+        function redrawMarkers() {
             const container = document.getElementById('fieldsList');
             const markersLayer = document.getElementById('markersLayer');
             
@@ -125,32 +140,39 @@
             }
 
             fields.forEach((field, index) => {
+                // 左側清單
                 const div = document.createElement('div');
                 div.className = "flex justify-between items-center bg-gray-50 p-2 rounded border text-sm";
                 div.innerHTML = `
-                    <span><b>${field.key}</b> (X:${field.x}, Y:${field.y})</span>
+                    <div>
+                        <b>${field.key}</b> <span class="text-xs text-blue-600 bg-blue-50 px-1 rounded">${field.type}</span>
+                        <div class="text-[10px] text-gray-500">X:${field.x}, Y:${field.y}</div>
+                    </div>
                     <button onclick="removeField(${index})" class="text-red-500 font-bold px-2 hover:bg-red-50 rounded">✕</button>
                 `;
                 container.appendChild(div);
 
-                const marker = document.createElement('div');
-                marker.className = "absolute bg-red-500 text-white text-[10px] px-1 rounded-full shadow border border-white pointer-events-none transform -translate-x-1/2 -translate-y-1/2";
-                marker.style.left = `${field.x * scale}px`;
-                marker.style.top = `${field.y * scale}px`;
-                marker.innerText = field.key;
-                markersLayer.appendChild(marker);
+                // 右側預覽畫面的模擬外框（讓使用者看得見框線）
+                const box = document.createElement('div');
+                box.className = "absolute border-2 border-dashed border-blue-500 bg-blue-100 bg-opacity-30 flex items-center px-1 text-[10px] text-blue-800 font-bold pointer-events-none";
+                box.style.left = `${field.x * scale}px`;
+                box.style.top = `${field.y * scale}px`;
+                box.style.width = `${field.width * scale}px`;
+                box.style.height = `${field.height * scale}px`;
+                box.innerText = field.key;
+                markersLayer.appendChild(box);
             });
         }
 
         function removeField(index) {
             fields.splice(index, 1);
-            updateFieldsUI();
+            redrawMarkers();
         }
 
         async function downloadTemplateAndConfig() {
             const targetUrl = document.getElementById('targetUrl').value.trim();
             if (!targetUrl) {
-                alert('請先填寫未來檔案在伺服器上的網址！');
+                alert('請先填寫伺服器上的檔案公開網址！');
                 return;
             }
             if (fields.length === 0) {
@@ -158,25 +180,22 @@
                 return;
             }
 
-            // 組合配置物件
             const configData = {
                 url: targetUrl,
                 fields: fields
             };
 
-            // 產生供手動加密的 JSON 字串
             const jsonString = JSON.stringify(configData);
             document.getElementById('rawJsonText').value = jsonString;
             document.getElementById('resultSection').classList.remove('hidden');
 
-            // 同時下載原始 PDF（你可以直接拿這個去上傳到你的伺服器）
             const blob = new Blob([originalArrayBuffer], { type: 'application/pdf' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'form-template.pdf';
             link.click();
 
-            alert('PDF 模板已下載！請將它上傳到你的伺服器，並使用左側顯示的 JSON 內容進行手動 Base64 加密後放入 ?token= 即可。');
+            alert('模板 PDF 已下載！請上傳至伺服器，並將下方的 JSON 進行 Base64 加密後放入網址中。');
         }
     </script>
 </body>
