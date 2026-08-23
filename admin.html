@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>專業 PDF 表單視覺化設計器</title>
+    <title>PDF 拖曳式表單設計器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
@@ -14,7 +14,7 @@
         
         <!-- 左側控制面板 -->
         <div class="bg-white p-6 rounded-xl shadow-md md:col-span-1 space-y-4">
-            <h1 class="text-xl font-bold text-gray-800">1. 設定表單</h1>
+            <h1 class="text-xl font-bold text-gray-800">1. 表單設定</h1>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">上傳原始 PDF</label>
@@ -28,11 +28,11 @@
 
             <hr>
 
-            <h2 class="text-md font-semibold text-gray-700">2. 新增欄位屬性</h2>
+            <h2 class="text-md font-semibold text-gray-700">2. 準備繪製的欄位屬性</h2>
             <div class="space-y-3">
                 <div>
                     <label class="text-xs text-gray-500 block">欄位名稱/標題</label>
-                    <input type="text" id="fieldKey" placeholder="例如：姓名、性別" class="w-full p-2 border rounded text-sm">
+                    <input type="text" id="fieldKey" placeholder="例如：姓名、日期" class="w-full p-2 border rounded text-sm">
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 block">欄位類型</label>
@@ -47,17 +47,7 @@
                     <label class="text-xs text-gray-500 block">選項 (以半形逗號分隔)</label>
                     <input type="text" id="fieldOptions" placeholder="選項A,選項B,選項C" class="w-full p-2 border rounded text-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="text-xs text-gray-500 block">寬度 (px)</label>
-                        <input type="number" id="fieldWidth" value="150" class="w-full p-2 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500 block">高度 (px)</label>
-                        <input type="number" id="fieldHeight" value="25" class="w-full p-2 border rounded text-sm">
-                    </div>
-                </div>
-                <p class="text-[11px] text-blue-600 bg-blue-50 p-2 rounded">💡 設定好上方屬性後，直接在右側 PDF 畫面上點擊想放置的位置！</p>
+                <p class="text-[11px] text-blue-600 bg-blue-50 p-2 rounded">💡 設定好上方屬性後，直接在右側 PDF 畫面上**按住滑鼠左鍵並拖曳**來畫出欄位大小！</p>
             </div>
 
             <hr>
@@ -77,13 +67,16 @@
             </div>
         </div>
 
-        <!-- 右側預覽與點擊區 -->
+        <!-- 右側拖曳繪製區 -->
         <div class="bg-white p-6 rounded-xl shadow-md md:col-span-3 flex flex-col items-center overflow-auto min-h-[700px]">
-            <h2 class="text-md font-semibold text-gray-700 mb-2 self-start">3. 點擊 PDF 頁面放置欄位</h2>
-            <div id="pdfContainer" class="relative border shadow-inner bg-gray-200 cursor-crosshair">
+            <h2 class="text-md font-semibold text-gray-700 mb-2 self-start">3. 在 PDF 畫面上按住拖曳以建立欄位</h2>
+            <div id="pdfContainer" class="relative border shadow-inner bg-gray-200 select-none cursor-crosshair">
                 <p id="placeholderText" class="text-gray-400 p-20">請先在左側上傳 PDF</p>
                 <canvas id="pdfCanvas"></canvas>
+                <!-- 放置所有已建立欄位與目前正在拖曳框的容器 -->
                 <div id="markersLayer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+                <!-- 拖曳中的暫時外框 -->
+                <div id="drawingBox" class="absolute border-2 border-dashed border-blue-600 bg-blue-400 bg-opacity-30 hidden pointer-events-none"></div>
             </div>
         </div>
     </div>
@@ -94,6 +87,11 @@
         let scale = 1.2;
         let fields = [];
         let currentPdfPage = 1;
+
+        // 拖曳狀態變數
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+        let currentX = 0, currentY = 0;
 
         document.getElementById('pdfFile').addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -119,31 +117,75 @@
             document.getElementById('optionsGroup').style.display = type === 'select' ? 'block' : 'none';
         }
 
-        document.getElementById('pdfCanvas').addEventListener('click', function(event) {
+        const canvasEl = document.getElementById('pdfCanvas');
+
+        // 1. 滑鼠按下：開始拖曳
+        canvasEl.addEventListener('mousedown', (e) => {
             if (!pdfDocJs) return;
             const key = document.getElementById('fieldKey').value.trim();
             if (!key) {
-                alert('請先在左側輸入「欄位名稱/標題」再點擊畫面！');
+                alert('請先在左側輸入「欄位名稱/標題」再開始拖曳！');
                 return;
             }
 
-            const rect = this.getBoundingClientRect();
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
+            const rect = canvasEl.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isDrawing = true;
+        });
 
+        // 2. 滑鼠移動：即時更新拖曳方框大小
+        canvasEl.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvasEl.getBoundingClientRect();
+            currentX = e.clientX - rect.left;
+            currentY = e.clientY - rect.top;
+
+            const box = document.getElementById('drawingBox');
+            box.style.display = 'block';
+
+            const left = Math.min(startX, currentX);
+            const top = Math.min(startY, currentY);
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+
+            box.style.left = `${left}px`;
+            box.style.top = `${top}px`;
+            box.style.width = `${width}px`;
+            box.style.height = `${height}px`;
+        });
+
+        // 3. 滑鼠放開：完成拖曳並建立欄位
+        window.addEventListener('mouseup', (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            document.getElementById('drawingBox').style.display = 'none';
+
+            const rect = canvasEl.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            const endY = e.clientY - rect.top;
+
+            const rawLeft = Math.min(startX, endX);
+            const rawTop = Math.min(startY, endY);
+            const rawWidth = Math.abs(endX - startX);
+            const rawHeight = Math.abs(endY - startY);
+
+            // 如果拖曳範圍太小（小於 10px），視為無效點擊
+            if (rawWidth < 10 || rawHeight < 10) return;
+
+            const key = document.getElementById('fieldKey').value.trim();
             const type = document.getElementById('fieldType').value;
             const options = document.getElementById('fieldOptions').value.split(',').map(s => s.trim()).filter(Boolean);
-            const width = parseInt(document.getElementById('fieldWidth').value) || 150;
-            const height = parseInt(document.getElementById('fieldHeight').value) || 25;
 
+            // 轉換為 PDF 實際座標
             fields.push({
                 key,
                 type,
                 options: type === 'select' ? options : [],
-                x: Math.round(clickX / scale),
-                y: Math.round(clickY / scale),
-                width,
-                height,
+                x: Math.round(rawLeft / scale),
+                y: Math.round(rawTop / scale),
+                width: Math.round(rawWidth / scale),
+                height: Math.round(rawHeight / scale),
                 page: currentPdfPage - 1
             });
 
@@ -176,7 +218,7 @@
         function downloadTemplateAndJson() {
             const targetUrl = document.getElementById('targetUrl').value.trim();
             if (!targetUrl) { alert('請填寫伺服器上的 PDF 網址！'); return; }
-            if (fields.length === 0) { alert('請至少在畫面上建立一個欄位！'); return; }
+            if (fields.length === 0) { alert('請至少在畫面上拖曳建立一個欄位！'); return; }
 
             const configData = { url: targetUrl, fields };
             document.getElementById('rawJsonText').value = JSON.stringify(configData);
