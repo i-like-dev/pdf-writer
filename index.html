@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>填寫表單</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
+    <!-- 引入字型支援中文（若 PDF 需要中文填寫，pdf-lib 預設字型不支援中文，需載入自訂字型或標準字型） -->
+    <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.js"></script>
+</head>
+<body class="bg-gray-50 p-6">
+    <div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">請填寫文件內容</h1>
+        
+        <div id="formContainer" class="space-y-4 mb-6">
+            <!-- 動態生成輸入框 -->
+        </div>
+
+        <button onclick="submitForm()" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">產出並下載 PDF</button>
+    </div>
+
+    <script>
+        let templateData = null;
+
+        window.onload = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+
+            if (!token) {
+                alert('無效的連結！');
+                return;
+            }
+
+            try {
+                // 解碼 Token
+                const jsonString = decodeURIComponent(escape(atob(token)));
+                templateData = JSON.parse(jsonString);
+
+                // 產生動態輸入表單
+                const container = document.getElementById('formContainer');
+                templateData.fields.forEach((field, index) => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
+                        <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500" placeholder="請輸入 ${field.key}">
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (e) {
+                console.error(e);
+                alert('解析模板失敗，連結可能已損毀。');
+            }
+        };
+
+        async function submitForm() {
+            if (!templateData) return;
+
+            try {
+                // 1. 載入原始 PDF Base64
+                const pdfBytes = Uint8Array.from(atob(templateData.pdf.split(',')[1]), c => c.charCodeAt(0));
+                
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+                
+                // 註冊字型套件（若需要填寫中文，建議載入支援中文的 TTF 字型，例如微軟正黑體或思源黑體，此處以內建標準字型為例，若有中文需求需額外嵌入 fontkit）
+                pdfDoc.registerFontkit(fontkit);
+                
+                // 為了支援中文，可以從 Google Fonts 載入開源中文字型（例如 Noto Sans TC）
+                const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
+                const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
+                const customFont = await pdfDoc.embedFont(fontBytes);
+
+                const pages = pdfDoc.getPages();
+
+                // 2. 依照欄位填入資料
+                templateData.fields.forEach((field, index) => {
+                    const value = document.getElementById(`input-${index}`).value;
+                    const page = pages[field.page];
+                    
+                    if (page) {
+                        page.drawText(value, {
+                            x: field.x,
+                            y: page.getHeight() - field.y, // PDF 座標系 Y 軸由下往上，需轉換
+                            size: 12,
+                            font: customFont,
+                        });
+                    }
+                });
+
+                // 3. 匯出並下載 PDF
+                const modifiedPdfBytes = await pdfDoc.save();
+                const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'filled-document.pdf';
+                link.click();
+
+            } catch (error) {
+                console.error(error);
+                alert('產生 PDF 時發生錯誤！');
+            }
+        }
+    </script>
+</body>
+</html>
