@@ -2,21 +2,21 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>檔案填寫與下載</title>
+    <title>文件填寫系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.js"></script>
 </head>
 <body class="bg-gray-50 p-6">
-    <div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-md">
+    <div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-md border">
         <h1 class="text-2xl font-bold mb-2 text-gray-800">請填寫表單內容</h1>
-        <p id="loadingStatus" class="text-sm text-gray-500 mb-6">正在初始化表單...</p>
+        <p id="loadingStatus" class="text-sm text-gray-500 mb-6">正在載入表單設定...</p>
         
         <div id="formContainer" class="space-y-4 mb-6">
-            <!-- 動態生成輸入框 -->
+            <!-- 動態生成表單元件 -->
         </div>
 
-        <button id="submitBtn" onclick="submitForm()" disabled class="w-full bg-gray-400 text-white py-3 rounded-lg font-semibold cursor-not-allowed">載入中...</button>
+        <button id="submitBtn" onclick="submitForm()" disabled class="w-full bg-gray-400 text-white py-3 rounded-lg font-semibold cursor-not-allowed transition">載入中...</button>
     </div>
 
     <script>
@@ -32,31 +32,48 @@
             }
 
             try {
-                // 手動 Base64 解密
+                // Base64 解密
                 const jsonString = decodeURIComponent(escape(atob(token)));
                 configData = JSON.parse(jsonString);
 
                 const container = document.getElementById('formContainer');
                 container.innerHTML = '';
                 
+                const todayStr = new Date().toISOString().split('T')[0]; // 取得 YYYY-MM-DD
+
                 configData.fields.forEach((field, index) => {
                     const div = document.createElement('div');
+                    div.className = "bg-gray-50 p-3 rounded-lg border";
+                    
+                    let inputHtml = '';
+                    if (field.type === 'select') {
+                        // 下拉選單
+                        let optionsHtml = field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                        inputHtml = `<select id="input-${index}" class="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500">${optionsHtml}</select>`;
+                    } else if (field.type === 'date') {
+                        // 自動帶入日期（預設為今天，可修改）
+                        inputHtml = `<input type="date" id="input-${index}" value="${todayStr}" class="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500">`;
+                    } else {
+                        // 一般文字
+                        inputHtml = `<input type="text" id="input-${index}" class="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">`;
+                    }
+
                     div.innerHTML = `
-                        <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
-                        <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">${field.key} <span class="text-xs font-normal text-gray-400">(${field.type})</span></label>
+                        ${inputHtml}
                     `;
                     container.appendChild(div);
                 });
 
-                document.getElementById('loadingStatus').innerText = `已載入模板，共需填寫 ${configData.fields.length} 個欄位。`;
+                document.getElementById('loadingStatus').innerText = `模板載入成功，共需填寫 ${configData.fields.length} 個欄位。`;
                 
                 const btn = document.getElementById('submitBtn');
                 btn.disabled = false;
-                btn.className = "w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 cursor-pointer";
+                btn.className = "w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 cursor-pointer transition";
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗（請確認是否有確實進行 Base64 加密）。';
+                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗，請確認 Base64 編碼是否正確。';
             }
         };
 
@@ -65,23 +82,25 @@
 
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerText = '正在處理並產生 PDF...';
+            btn.innerText = '正在處理並產生 PDF（正在嵌入中文支援）...';
 
             try {
+                // 下載伺服器上的 PDF 檔案
                 const response = await fetch(configData.url);
-                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案，請檢查網址或 CORS 設定');
+                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案，請檢查網址或伺服器 CORS 設定');
                 const pdfBytes = await response.arrayBuffer();
                 
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 pdfDoc.registerFontkit(fontkit);
                 
-                // 載入開源中文字型防止亂碼
+                // 強制載入開源中文字型（Noto Sans TC），徹底解決中文亂碼、問號或方框問題
                 const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
                 const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
                 const customFont = await pdfDoc.embedFont(fontBytes);
 
                 const pages = pdfDoc.getPages();
 
+                // 填入資料
                 configData.fields.forEach((field, index) => {
                     const value = document.getElementById(`input-${index}`).value;
                     const page = pages[field.page];
@@ -89,13 +108,15 @@
                     if (page) {
                         page.drawText(value, {
                             x: field.x,
-                            y: page.getHeight() - field.y,
+                            y: page.getHeight() - field.y, // PDF 座標轉換 (由下往上)
                             size: 11,
                             font: customFont,
+                            color: PDFLib.rgb(0, 0, 0) // 純黑色字體
                         });
                     }
                 });
 
+                // 匯出並觸發下載
                 const modifiedPdfBytes = await pdfDoc.save();
                 const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
