@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>線上表單填寫</title>
+    <title>線上表單填寫與下載</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.js"></script>
@@ -35,7 +35,7 @@
                 const container = document.getElementById('formContainer');
                 container.innerHTML = '';
                 
-                const todayStr = new Date().toISOString().split('T')[0]; // 取得 YYYY-MM-DD
+                const todayStr = new Date().toISOString().split('T')[0];
 
                 configData.fields.forEach((field, index) => {
                     const div = document.createElement('div');
@@ -45,7 +45,7 @@
                         inputHtml = `
                             <label class="flex items-center space-x-2 cursor-pointer mt-2">
                                 <input type="checkbox" id="input-${index}" class="w-5 h-5 text-blue-600 rounded">
-                                <span class="text-sm font-medium text-gray-700">勾選 ${field.key}</span>
+                                <span class="text-sm font-medium text-gray-700">勾選：${field.key}</span>
                             </label>
                         `;
                     } else if (field.type === 'select') {
@@ -60,10 +60,18 @@
                             <input type="date" id="input-${index}" value="${todayStr}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                         `;
                     } else {
-                        inputHtml = `
-                            <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
-                            <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">
-                        `;
+                        // 判斷如果高度大於 40px，就提供多行文字輸入框 (textarea)
+                        if (field.height && field.height > 40) {
+                            inputHtml = `
+                                <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
+                                <textarea id="input-${index}" rows="4" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}"></textarea>
+                            `;
+                        } else {
+                            inputHtml = `
+                                <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
+                                <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">
+                            `;
+                        }
                     }
 
                     div.innerHTML = inputHtml;
@@ -89,13 +97,13 @@
 
             try {
                 const response = await fetch(configData.url);
-                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案（請檢查 CORS 或網址）');
+                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案（請檢查網址或 SSL 憑證是否有誤）');
                 const pdfBytes = await response.arrayBuffer();
                 
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 pdfDoc.registerFontkit(fontkit);
                 
-                // 載入高畫質開源中文字型 (Noto Sans TC)，徹底解決中文亂碼
+                // 載入開源中文字型 (Noto Sans TC)，徹底解決中文亂碼問題
                 const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
                 const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
                 const customFont = await pdfDoc.embedFont(fontBytes);
@@ -106,14 +114,14 @@
                     const page = pages[field.page];
                     if (!page) return;
 
-                    const targetY = page.getHeight() - field.y - (field.height || 20);
+                    const targetY = page.getHeight() - field.y - 14;
 
                     if (field.type === 'checkbox') {
                         const isChecked = document.getElementById(`input-${index}`).checked;
                         if (isChecked) {
                             page.drawText('V', {
                                 x: field.x + 4,
-                                y: targetY + 4,
+                                y: targetY,
                                 size: 14,
                                 font: customFont,
                             });
@@ -121,11 +129,14 @@
                     } else {
                         const value = document.getElementById(`input-${index}`).value;
                         if (value) {
+                            // 支援大範圍方塊自動換行
                             page.drawText(value, {
                                 x: field.x + 4,
-                                y: targetY + 6,
+                                y: targetY,
                                 size: 11,
                                 font: customFont,
+                                maxWidth: field.width - 8,
+                                lineHeight: 15,
                             });
                         }
                     }
