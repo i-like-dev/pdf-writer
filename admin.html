@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF 模板產生器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 pdf-lib -->
+    <script src="https://unpkg.com/pdf-lib@1.4.0/dist/pdf-lib.min.js"></script>
+</head>
+<body class="bg-gray-50 p-6">
+    <div class="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">1. 上傳 PDF 並製作模板</h1>
+        
+        <input type="file" id="pdfFile" accept="application/pdf" class="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+
+        <div id="editorSection" class="hidden">
+            <h2 class="text-lg font-semibold mb-2">設定填寫欄位</h2>
+            <div id="fieldsContainer" class="space-y-3 mb-4">
+                <!-- 動態新增欄位 -->
+            </div>
+            <button onclick="addField()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded mb-4 hover:bg-gray-300">+ 新增欄位</button>
+            
+            <hr class="my-4">
+            
+            <button onclick="generateLink()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">產生訪客填寫連結</button>
+            
+            <div id="resultSection" class="mt-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">訪客填寫專屬連結：</label>
+                <input type="text" id="shareLink" readonly class="w-full p-2 border rounded bg-gray-100 text-sm mb-2">
+                <a id="previewBtn" href="#" target="_blank" class="inline-block text-blue-600 underline text-sm">點此預覽填寫頁面</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pdfBase64 = "";
+
+        document.getElementById('pdfFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                // 取得 Base64 字串
+                pdfBase64 = event.target.result;
+                document.getElementById('editorSection').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function addField() {
+            const container = document.getElementById('fieldsContainer');
+            const div = document.createElement('div');
+            div.className = "flex gap-2 items-center";
+            div.innerHTML = `
+                <input type="text" placeholder="欄位名稱 (例如: 姓名)" class="field-key flex-1 p-2 border rounded">
+                <input type="number" placeholder="X座標" class="field-x w-24 p-2 border rounded" value="100">
+                <input type="number" placeholder="Y座標" class="field-y w-24 p-2 border rounded" value="100">
+                <input type="number" placeholder="頁碼" class="field-page w-16 p-2 border rounded" value="1">
+                <button onclick="this.parentElement.remove()" class="text-red-500 font-bold px-2">✕</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function generateLink() {
+            const fieldElements = document.querySelectorAll('#fieldsContainer > div');
+            const fields = [];
+            fieldElements.forEach(el => {
+                fields.push({
+                    key: el.querySelector('.field-key').value,
+                    x: parseFloat(el.querySelector('.field-x').value),
+                    y: parseFloat(el.querySelector('.field-y').value),
+                    page: parseInt(el.querySelector('.field-page').value) - 1
+                });
+            });
+
+            // 將 PDF 與欄位設定打包成一個物件，並轉成 Base64
+            const templateData = {
+                pdf: pdfBase64,
+                fields: fields
+            };
+            
+            const jsonString = JSON.stringify(templateData);
+            const base64Token = btoa(unescape(encodeURIComponent(jsonString))); // 支援中文的 base64 編碼
+
+            // 組合 GitHub Pages 網址路徑
+            const baseUrl = window.location.href.replace('admin.html', 'index.html');
+            const finalLink = `${baseUrl}?token=${base64Token}`;
+
+            document.getElementById('shareLink').value = finalLink;
+            document.getElementById('previewBtn').href = finalLink;
+            document.getElementById('resultSection').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
