@@ -24,6 +24,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">伺服器上的 PDF 網址</label>
                 <input type="text" id="targetUrl" placeholder="https://example.com/form.pdf" class="w-full p-2 border rounded text-sm">
+                <p class="text-[11px] text-red-500 mt-1">⚠️ 請確保此網址的 SSL 憑證正常，否則訪客端會發生 Failed to fetch。</p>
             </div>
 
             <hr>
@@ -32,12 +33,12 @@
             <div class="space-y-3">
                 <div>
                     <label class="text-xs text-gray-500 block">欄位名稱/標題</label>
-                    <input type="text" id="fieldKey" placeholder="例如：姓名、日期" class="w-full p-2 border rounded text-sm">
+                    <input type="text" id="fieldKey" placeholder="例如：姓名、申請人事由" class="w-full p-2 border rounded text-sm">
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 block">欄位類型</label>
                     <select id="fieldType" class="w-full p-2 border rounded text-sm bg-white" onchange="toggleFieldOptions()">
-                        <option value="text">一般文字輸入</option>
+                        <option value="text">一般文字輸入 (大區塊會自動換行)</option>
                         <option value="date">自動帶入今天日期 (可手動修改)</option>
                         <option value="checkbox">勾選框 (打勾)</option>
                         <option value="select">下拉選單 (選項用逗號隔開)</option>
@@ -73,9 +74,7 @@
             <div id="pdfContainer" class="relative border shadow-inner bg-gray-200 select-none cursor-crosshair">
                 <p id="placeholderText" class="text-gray-400 p-20">請先在左側上傳 PDF</p>
                 <canvas id="pdfCanvas"></canvas>
-                <!-- 放置所有已建立欄位與目前正在拖曳框的容器 -->
                 <div id="markersLayer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
-                <!-- 拖曳中的暫時外框 -->
                 <div id="drawingBox" class="absolute border-2 border-dashed border-blue-600 bg-blue-400 bg-opacity-30 hidden pointer-events-none"></div>
             </div>
         </div>
@@ -88,7 +87,6 @@
         let fields = [];
         let currentPdfPage = 1;
 
-        // 拖曳狀態變數
         let isDrawing = false;
         let startX = 0, startY = 0;
         let currentX = 0, currentY = 0;
@@ -119,7 +117,6 @@
 
         const canvasEl = document.getElementById('pdfCanvas');
 
-        // 1. 滑鼠按下：開始拖曳
         canvasEl.addEventListener('mousedown', (e) => {
             if (!pdfDocJs) return;
             const key = document.getElementById('fieldKey').value.trim();
@@ -134,7 +131,6 @@
             isDrawing = true;
         });
 
-        // 2. 滑鼠移動：即時更新拖曳方框大小
         canvasEl.addEventListener('mousemove', (e) => {
             if (!isDrawing) return;
             const rect = canvasEl.getBoundingClientRect();
@@ -155,7 +151,6 @@
             box.style.height = `${height}px`;
         });
 
-        // 3. 滑鼠放開：完成拖曳並建立欄位
         window.addEventListener('mouseup', (e) => {
             if (!isDrawing) return;
             isDrawing = false;
@@ -170,14 +165,12 @@
             const rawWidth = Math.abs(endX - startX);
             const rawHeight = Math.abs(endY - startY);
 
-            // 如果拖曳範圍太小（小於 10px），視為無效點擊
             if (rawWidth < 10 || rawHeight < 10) return;
 
             const key = document.getElementById('fieldKey').value.trim();
             const type = document.getElementById('fieldType').value;
             const options = document.getElementById('fieldOptions').value.split(',').map(s => s.trim()).filter(Boolean);
 
-            // 轉換為 PDF 實際座標
             fields.push({
                 key,
                 type,
