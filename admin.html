@@ -2,40 +2,41 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>PDF 專業表單設計器</title>
+    <title>PDF 專業互動表單設計器 (PowerPoint 模式)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     </script>
 </head>
-<body class="bg-gray-100 p-6">
+<body class="bg-gray-100 p-6 select-none">
     <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
         
-        <div class="bg-white p-6 rounded-xl shadow-md md:col-span-1 space-y-4">
+        <!-- 左側控制面板 -->
+        <div class="bg-white p-5 rounded-xl shadow-md md:col-span-1 space-y-4 overflow-y-auto max-h-[85vh]">
             <h1 class="text-xl font-bold text-gray-800">1. 表單設定</h1>
             
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">上傳原始 PDF</label>
-                <input type="file" id="pdfFile" accept="application/pdf" class="w-full text-xs text-gray-500 file:py-2 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700"/>
+                <label class="block text-xs font-medium text-gray-700 mb-1">上傳原始 PDF</label>
+                <input type="file" id="pdfFile" accept="application/pdf" class="w-full text-xs text-gray-500 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700"/>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">伺服器上的 PDF 網址</label>
-                <input type="text" id="targetUrl" placeholder="https://cdn.techmeow.tw/files/pass.pdf" class="w-full p-2 border rounded text-sm">
+                <label class="block text-xs font-medium text-gray-700 mb-1">伺服器上的 PDF 網址</label>
+                <input type="text" id="targetUrl" placeholder="https://cdn.techmeow.tw/files/pass.pdf" class="w-full p-2 border rounded text-xs">
             </div>
 
             <hr>
 
-            <h2 class="text-md font-semibold text-gray-700">2. 欄位類型選擇</h2>
-            <div class="space-y-3">
+            <h2 class="text-sm font-semibold text-gray-700">2. 新增欄位屬性</h2>
+            <div class="space-y-2">
                 <div>
-                    <label class="text-xs text-gray-500 block">欄位名稱/標題</label>
-                    <input type="text" id="fieldKey" placeholder="例如：申請人姓名" class="w-full p-2 border rounded text-sm">
+                    <label class="text-[11px] text-gray-500 block">欄位名稱/標題</label>
+                    <input type="text" id="fieldKey" placeholder="例如：申請人姓名" class="w-full p-2 border rounded text-xs">
                 </div>
                 <div>
-                    <label class="text-xs text-gray-500 block">文字/元件類型</label>
-                    <select id="fieldType" class="w-full p-2 border rounded text-sm bg-white" onchange="toggleFieldOptions()">
+                    <label class="text-[11px] text-gray-500 block">文字/元件類型</label>
+                    <select id="fieldType" class="w-full p-2 border rounded text-xs bg-white" onchange="toggleFieldOptions()">
                         <option value="text">一般文字 (靠左)</option>
                         <option value="textarea">多行文字事由 (自動換行)</option>
                         <option value="center">置中文字 (姓名/日期)</option>
@@ -46,37 +47,56 @@
                     </select>
                 </div>
                 <div id="optionsGroup" class="hidden">
-                    <label class="text-xs text-gray-500 block">選項 (逗號分隔)</label>
-                    <input type="text" id="fieldOptions" placeholder="選項A,選項B" class="w-full p-2 border rounded text-sm">
+                    <label class="text-[11px] text-gray-500 block">選項 (逗號分隔)</label>
+                    <input type="text" id="fieldOptions" placeholder="選項A,選項B" class="w-full p-2 border rounded text-xs">
                 </div>
-                <p class="text-[11px] text-blue-600 bg-blue-50 p-2 rounded">💡 設定後，在右側畫面上**按住滑鼠拖曳**畫出範圍即可！</p>
+                <button onclick="addNewField()" class="w-full bg-emerald-600 text-white py-2 rounded text-xs font-semibold hover:bg-emerald-700">+ 新增欄位到畫面上</button>
+            </div>
+
+            <hr>
+
+            <!-- 選中物件的微調面板 -->
+            <div id="inspectorPanel" class="bg-blue-50 p-3 rounded-lg border border-blue-200 hidden space-y-2">
+                <h3 class="text-xs font-bold text-blue-800 flex justify-between items-center">
+                    <span>⚙️ 欄位精準微調</span>
+                    <button onclick="deleteSelectedField()" class="text-red-500 hover:underline text-[10px]">刪除此欄位</button>
+                </h3>
+                <div id="inspectorName" class="text-xs font-semibold text-gray-700"></div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div><label class="text-[10px] text-gray-500">X 座標</label><input type="number" id="insX" onchange="updateSelectedProp()" class="w-full p-1 border rounded bg-white"></div>
+                    <div><label class="text-[10px] text-gray-500">Y 座標</label><input type="number" id="insY" onchange="updateSelectedProp()" class="w-full p-1 border rounded bg-white"></div>
+                    <div><label class="text-[10px] text-gray-500">寬度 (Width)</label><input type="number" id="insW" onchange="updateSelectedProp()" class="w-full p-1 border rounded bg-white"></div>
+                    <div><label class="text-[10px] text-gray-500">高度 (Height)</label><input type="number" id="insH" onchange="updateSelectedProp()" class="w-full p-1 border rounded bg-white"></div>
+                </div>
             </div>
 
             <hr>
 
             <div>
-                <h3 class="text-sm font-semibold mb-2">已建立的欄位</h3>
-                <div id="fieldsList" class="space-y-2 max-h-36 overflow-y-auto pr-1">
-                    <p class="text-xs text-gray-400">尚無欄位</p>
+                <h3 class="text-xs font-semibold mb-1 flex justify-between">
+                    <span>3. 欄位順序與列表 (可調整順序)</span>
+                </h3>
+                <div id="fieldsList" class="space-y-1 max-h-40 overflow-y-auto pr-1">
+                    <p class="text-[11px] text-gray-400">尚無欄位</p>
                 </div>
             </div>
 
-            <button onclick="generateShortConfig()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 text-sm">產生短 Token 與設定檔</button>
+            <button onclick="generateShortConfig()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 text-xs">產生短 Token 與設定檔</button>
             
-            <div id="resultSection" class="hidden space-y-2 bg-gray-50 p-3 rounded border">
-                <label class="text-[11px] font-bold text-gray-700">超短 Token 參數（直接貼在 ?token= 後面）：</label>
-                <input type="text" id="shortTokenInput" readonly class="w-full p-1 border rounded bg-white text-xs font-mono">
-                <p class="text-[10px] text-gray-500">同時也會自動下載 JSON 設定檔，請上傳至伺服器與 PDF 同資料夾。</p>
+            <div id="resultSection" class="hidden space-y-1 bg-gray-50 p-2 rounded border">
+                <label class="text-[10px] font-bold text-gray-700">超短 Token 參數：</label>
+                <input type="text" id="shortTokenInput" readonly class="w-full p-1 border rounded bg-white text-[10px] font-mono">
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-xl shadow-md md:col-span-3 flex flex-col items-center overflow-auto min-h-[700px]">
-            <h2 class="text-md font-semibold text-gray-700 mb-2 self-start">3. 在 PDF 畫面上按住拖曳以建立欄位</h2>
-            <div id="pdfContainer" class="relative border shadow-inner bg-gray-200 select-none cursor-crosshair">
+        <!-- 右側互動預覽與操作區 -->
+        <div class="bg-white p-6 rounded-xl shadow-md md:col-span-3 flex flex-col items-center overflow-auto min-h-[750px]">
+            <h2 class="text-sm font-semibold text-gray-700 mb-2 self-start">4. 畫布操作區 (點擊選取、拖曳移動、拉伸四邊控制點)</h2>
+            <div id="canvasContainer" class="relative border shadow-inner bg-gray-200 cursor-default" style="overflow: auto;">
                 <p id="placeholderText" class="text-gray-400 p-20">請先在左側上傳 PDF</p>
-                <canvas id="pdfCanvas"></canvas>
-                <div id="markersLayer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
-                <div id="drawingBox" class="absolute border-2 border-dashed border-blue-600 bg-blue-400 bg-opacity-30 hidden pointer-events-none"></div>
+                <canvas id="pdfCanvas" class="block"></canvas>
+                <!-- 放置 PowerPoint 風格互動方框的圖層 -->
+                <div id="interactiveLayer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
             </div>
         </div>
     </div>
@@ -86,11 +106,14 @@
         let originalArrayBuffer = null;
         let scale = 1.2;
         let fields = [];
+        let selectedIndex = null;
         let currentPdfPage = 1;
 
-        let isDrawing = false;
-        let startX = 0, startY = 0;
-        let currentX = 0, currentY = 0;
+        // 互動狀態變數
+        let isDragging = false;
+        let isResizing = null; // 記錄目前正在拉伸哪一個控制點 ('nw', 'ne', 'se', 'sw', 'n', 's', 'w', 'e')
+        let startMouseX = 0, startMouseY = 0;
+        let startFieldX = 0, startFieldY = 0, startFieldW = 0, startFieldH = 0;
 
         document.getElementById('pdfFile').addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -109,6 +132,7 @@
             canvas.height = viewport.height;
             canvas.width = viewport.width;
             await page.render({ canvasContext: context, viewport: viewport }).promise;
+            renderInteractiveLayer();
         }
 
         function toggleFieldOptions() {
@@ -116,81 +140,219 @@
             document.getElementById('optionsGroup').style.display = type === 'select' ? 'block' : 'none';
         }
 
-        const canvasEl = document.getElementById('pdfCanvas');
-
-        canvasEl.addEventListener('mousedown', (e) => {
-            if (!pdfDocJs) return;
+        function addNewField() {
             const key = document.getElementById('fieldKey').value.trim();
             if (!key) { alert('請先輸入欄位名稱！'); return; }
-            const rect = canvasEl.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
-            isDrawing = true;
-        });
+            const type = document.getElementById('fieldType').value;
+            const options = type === 'select' ? document.getElementById('fieldOptions').value.split(',').map(s=>s.trim()).filter(Boolean) : [];
 
-        canvasEl.addEventListener('mousemove', (e) => {
-            if (!isDrawing) return;
-            const rect = canvasEl.getBoundingClientRect();
-            currentX = e.clientX - rect.left;
-            currentY = e.clientY - rect.top;
-            const box = document.getElementById('drawingBox');
-            box.style.display = 'block';
-            box.style.left = `${Math.min(startX, currentX)}px`;
-            box.style.top = `${Math.min(startY, currentY)}px`;
-            box.style.width = `${Math.abs(currentX - startX)}px`;
-            box.style.height = `${Math.abs(currentY - startY)}px`;
-        });
-
-        window.addEventListener('mouseup', (e) => {
-            if (!isDrawing) return;
-            isDrawing = false;
-            document.getElementById('drawingBox').style.display = 'none';
-
-            const rect = canvasEl.getBoundingClientRect();
-            const endX = e.clientX - rect.left;
-            const endY = e.clientY - rect.top;
-
-            const rawLeft = Math.min(startX, endX);
-            const rawTop = Math.min(startY, endY);
-            const rawWidth = Math.abs(endX - startX);
-            const rawHeight = Math.abs(endY - startY);
-
-            if (rawWidth < 10 || rawHeight < 10) return;
-
+            // 預設建立在畫布中間偏左位置
             fields.push({
-                key: document.getElementById('fieldKey').value.trim(),
-                type: document.getElementById('fieldType').value,
-                options: document.getElementById('fieldType').value === 'select' ? document.getElementById('fieldOptions').value.split(',').map(s=>s.trim()).filter(Boolean) : [],
-                x: Math.round(rawLeft / scale),
-                y: Math.round(rawTop / scale),
-                width: Math.round(rawWidth / scale),
-                height: Math.round(rawHeight / scale),
+                key, type, options,
+                x: 100, y: 100, width: 120, height: 25,
                 page: currentPdfPage - 1
             });
-            updateFieldsUI();
-        });
+            selectedIndex = fields.length - 1;
+            renderInteractiveLayer();
+            updateUI();
+        }
 
-        function updateFieldsUI() {
-            const container = document.getElementById('fieldsList');
-            const markersLayer = document.getElementById('markersLayer');
-            container.innerHTML = '';
-            markersLayer.innerHTML = '';
+        // 渲染 PowerPoint 風格的互動圖層
+        function renderInteractiveLayer() {
+            const layer = document.getElementById('interactiveLayer');
+            layer.innerHTML = '';
 
             fields.forEach((f, index) => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center bg-gray-50 p-2 rounded border text-xs";
-                div.innerHTML = `<span><b>${f.key}</b> (${f.type})</span> <button onclick="fields.splice(${index},1);updateFieldsUI()" class="text-red-500 font-bold px-1">✕</button>`;
-                container.appendChild(div);
+                const el = document.createElement('div');
+                const isSelected = (index === selectedIndex);
+                
+                el.className = `absolute border flex items-center px-1 text-[11px] select-none pointer-events-auto ${
+                    isSelected ? 'border-blue-600 bg-blue-100 bg-opacity-60 text-blue-900 ring-2 ring-blue-400 z-20' : 'border-dashed border-gray-500 bg-gray-100 bg-opacity-40 text-gray-700 z-10'
+                }`;
+                el.style.left = `${f.x * scale}px`;
+                el.style.top = `${f.y * scale}px`;
+                el.style.width = `${f.width * scale}px`;
+                el.style.height = `${f.height * scale}px`;
+                el.innerHTML = `<span class="truncate pointer-events-none">${f.key}</span>`;
 
-                const marker = document.createElement('div');
-                marker.className = "absolute border-2 border-blue-500 bg-blue-200 bg-opacity-40 text-blue-900 text-[10px] flex items-center px-1 pointer-events-none";
-                marker.style.left = `${f.x * scale}px`;
-                marker.style.top = `${f.y * scale}px`;
-                marker.style.width = `${f.width * scale}px`;
-                marker.style.height = `${f.height * scale}px`;
-                marker.innerText = f.key;
-                markersLayer.appendChild(marker);
+                // 點擊選取該欄位
+                el.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    selectedIndex = index;
+                    renderInteractiveLayer();
+                    updateUI();
+
+                    // 準備拖曳移動
+                    isDragging = true;
+                    startMouseX = e.clientX;
+                    startMouseY = e.clientY;
+                    startFieldX = f.x;
+                    startFieldY = f.y;
+                });
+
+                // 如果被選中，產生 PowerPoint 的 8 個控制點 (大小調整點)
+                if (isSelected) {
+                    const handles = ['nw', 'ne', 'se', 'sw', 'n', 's', 'w', 'e'];
+                    handles.forEach(h => {
+                        const handleEl = document.createElement('div');
+                        handleEl.className = `absolute w-2.5 h-2.5 bg-white border-2 border-blue-600 rounded-full z-30 pointer-events-auto`;
+                        
+                        // 定位 8 個點的位置
+                        if (h.includes('n')) handleEl.style.top = '-5px';
+                        if (h.includes('s')) handleEl.style.bottom = '-5px';
+                        if (h.includes('w')) handleEl.style.left = '-5px';
+                        if (h.includes('e')) handleEl.style.right = '-5px';
+                        if (h === 'n' || h === 's') handleEl.style.left = 'calc(50% - 5px)';
+                        if (h === 'w' || h === 'e') handleEl.style.top = 'calc(50% - 5px)';
+                        
+                        // 鼠標樣式
+                        if (h === 'nw' || h === 'se') handleEl.style.cursor = 'nwse-resize';
+                        if (h === 'ne' || h === 'sw') handleEl.style.nesw-resize = '';
+                        if (h === 'n' || h === 's') handleEl.style.cursor = 'ns-resize';
+                        if (h === 'w' || h === 'e') handleEl.style.cursor = 'ew-resize';
+
+                        handleEl.addEventListener('mousedown', (e) => {
+                            e.stopPropagation();
+                            isResizing = h;
+                            startMouseX = e.clientX;
+                            startMouseY = e.clientY;
+                            startFieldX = f.x;
+                            startFieldY = f.y;
+                            startFieldW = f.width;
+                            startFieldH = f.height;
+                        });
+
+                        el.appendChild(handleEl);
+                    });
+                }
+
+                layer.appendChild(el);
             });
+        }
+
+        // 全域滑鼠移動事件：支援拖曳移動與拉伸改變大小
+        window.addEventListener('mousemove', (e) => {
+            if (selectedIndex === null) return;
+            const f = fields[selectedIndex];
+            const dx = (e.clientX - startMouseX) / scale;
+            const dy = (e.clientY - startMouseY) / scale;
+
+            if (isDragging) {
+                f.x = Math.round(startFieldX + dx);
+                f.y = Math.round(startFieldY + dy);
+                renderInteractiveLayer();
+                updateInspectorValues();
+            } else if (isResizing) {
+                let nx = startFieldX, ny = startFieldY, nw = startFieldW, nh = startFieldH;
+                
+                if (isResizing.includes('e')) nw = Math.max(20, startFieldW + dx);
+                if (isResizing.includes('s')) nh = Math.max(15, startFieldH + dy);
+                if (isResizing.includes('w')) {
+                    const potentialW = startFieldW - dx;
+                    if (potentialW > 20) { nx = startFieldX + dx; nw = potentialW; }
+                }
+                if (isResizing.includes('n')) {
+                    const potentialH = startFieldH - dy;
+                    if (potentialH > 15) { ny = startFieldY + dy; nh = potentialH; }
+                }
+
+                f.x = Math.round(nx);
+                f.y = Math.round(ny);
+                f.width = Math.round(nw);
+                f.height = Math.round(nh);
+                renderInteractiveLayer();
+                updateInspectorValues();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            isResizing = null;
+        });
+
+        // 點擊空白處取消選取
+        document.getElementById('canvasContainer').addEventListener('click', (e) => {
+            if (e.target.id === 'pdfCanvas' || e.target.id === 'canvasContainer' || e.target.id === 'interactiveLayer') {
+                selectedIndex = null;
+                renderInteractiveLayer();
+                updateUI();
+            }
+        });
+
+        function updateUI() {
+            const container = document.getElementById('fieldsList');
+            const inspector = document.getElementById('inspectorPanel');
+            container.innerHTML = '';
+
+            if (fields.length === 0) {
+                container.innerHTML = '<p class="text-[11px] text-gray-400">尚無欄位</p>';
+                inspector.classList.add('hidden');
+                return;
+            }
+
+            // 渲染左側欄位列表 (含上下順序調整按鈕)
+            fields.forEach((f, index) => {
+                const isSelected = (index === selectedIndex);
+                const div = document.createElement('div');
+                div.className = `flex justify-between items-center p-1.5 rounded border text-xs cursor-pointer ${isSelected ? 'bg-blue-100 border-blue-400 font-bold' : 'bg-gray-50'}`;
+                div.innerHTML = `
+                    <span onclick="selectedIndex=${index}; renderInteractiveLayer(); updateUI();" class="truncate flex-1">${index+1}. ${f.key}</span>
+                    <div class="flex items-center space-x-1">
+                        <button onclick="moveField(${index}, -1)" class="text-gray-500 hover:text-black px-1 text-[10px]">▲</button>
+                        <button onclick="moveField(${index}, 1)" class="text-gray-500 hover:text-black px-1 text-[10px]">▼</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // 更新微調面板數據
+            if (selectedIndex !== null) {
+                inspector.classList.remove('hidden');
+                document.getElementById('inspectorName').innerText = `目前選中: ${fields[selectedIndex].key}`;
+                updateInspectorValues();
+            } else {
+                inspector.classList.add('hidden');
+            }
+        }
+
+        function updateInspectorValues() {
+            if (selectedIndex === null) return;
+            const f = fields[selectedIndex];
+            document.getElementById('insX').value = f.x;
+            document.getElementById('insY').value = f.y;
+            document.getElementById('insW').value = f.width;
+            document.getElementById('insH').value = f.height;
+        }
+
+        function updateSelectedProp() {
+            if (selectedIndex === null) return;
+            const f = fields[selectedIndex];
+            f.x = parseInt(document.getElementById('insX').value) || 0;
+            f.y = parseInt(document.getElementById('insY').value) || 0;
+            f.width = parseInt(document.getElementById('insW').value) || 20;
+            f.height = parseInt(document.getElementById('insH').value) || 20;
+            renderInteractiveLayer();
+        }
+
+        function deleteSelectedField() {
+            if (selectedIndex === null) return;
+            fields.splice(selectedIndex, 1);
+            selectedIndex = null;
+            renderInteractiveLayer();
+            updateUI();
+        }
+
+        // 調整欄位順序 (上下移動)
+        function moveField(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= fields.length) return;
+            const temp = fields[index];
+            fields[index] = fields[targetIndex];
+            fields[targetIndex] = temp;
+            if (selectedIndex === index) selectedIndex = targetIndex;
+            else if (selectedIndex === targetIndex) selectedIndex = index;
+            renderInteractiveLayer();
+            updateUI();
         }
 
         function generateShortConfig() {
@@ -200,15 +362,11 @@
 
             const configData = { url: targetUrl, fields };
             const jsonString = JSON.stringify(configData);
-
-            // 將 JSON 網址本身進行 Base64（或直接將 JSON 檔案放在伺服器，token 僅傳 JSON 檔案的網址即可讓 token 變超短！）
-            // 這裡我們採用最聰明的做法：token 直接放 JSON 設定檔的網址（或對 JSON 網址進行 Base64，極短！）
-            const tokenVal = btoa(targetUrl.replace('.pdf', '.json')); // 讓 token 只包含設定檔網址的縮寫
+            const tokenVal = btoa(targetUrl.replace('.pdf', '.json'));
             
             document.getElementById('shortTokenInput').value = tokenVal;
             document.getElementById('resultSection').classList.remove('hidden');
 
-            // 自動下載該設定檔 JSON，你只要跟 PDF 一起上傳到伺服器即可！
             const jsonBlob = new Blob([jsonString], { type: 'application/json' });
             const jsonLink = document.createElement('a');
             jsonLink.href = URL.createObjectURL(jsonBlob);
