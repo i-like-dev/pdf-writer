@@ -29,12 +29,14 @@
             }
 
             try {
-                const jsonString = decodeURIComponent(escape(atob(token)));
-                configData = JSON.parse(jsonString);
+                // 解碼出對應的 JSON 設定檔網址（例如 pass.json）
+                const configJsonUrl = atob(token);
+                const res = await fetch(configJsonUrl);
+                if (!res.ok) throw new Error('無法讀取遠端設定檔 JSON');
+                configData = await res.json();
 
                 const container = document.getElementById('formContainer');
                 container.innerHTML = '';
-                
                 const todayStr = new Date().toISOString().split('T')[0];
 
                 configData.fields.forEach((field, index) => {
@@ -59,19 +61,16 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
                             <input type="date" id="input-${index}" value="${todayStr}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                         `;
+                    } else if (field.type === 'textarea') {
+                        inputHtml = `
+                            <label class="block text-sm font-medium text-gray-700 mb-1">${field.key} (多行)</label>
+                            <textarea id="input-${index}" rows="4" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}"></textarea>
+                        `;
                     } else {
-                        // 判斷如果高度大於 40px，就提供多行文字輸入框 (textarea)
-                        if (field.height && field.height > 40) {
-                            inputHtml = `
-                                <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
-                                <textarea id="input-${index}" rows="4" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}"></textarea>
-                            `;
-                        } else {
-                            inputHtml = `
-                                <label class="block text-sm font-medium text-gray-700 mb-1">${field.key}</label>
-                                <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">
-                            `;
-                        }
+                        inputHtml = `
+                            <label class="block text-sm font-medium text-gray-700 mb-1">${field.key} <span class="text-xs text-gray-400">(${field.type})</span></label>
+                            <input type="text" id="input-${index}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="請輸入 ${field.key}">
+                        `;
                     }
 
                     div.innerHTML = inputHtml;
@@ -85,7 +84,7 @@
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('loadingStatus').innerText = '錯誤：Token 解析失敗。';
+                document.getElementById('loadingStatus').innerText = '錯誤：無法載入設定檔（請確認 Token 與 JSON 網址是否正確）。';
             }
         };
 
@@ -97,14 +96,14 @@
 
             try {
                 const response = await fetch(configData.url);
-                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案（請檢查網址或 SSL 憑證是否有誤）');
+                if (!response.ok) throw new Error('無法下載遠端 PDF 檔案');
                 const pdfBytes = await response.arrayBuffer();
                 
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 pdfDoc.registerFontkit(fontkit);
                 
-                // 載入開源中文字型 (Noto Sans TC)，徹底解決中文亂碼問題
-                const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-tc@4.5.1/files/noto-sans-tc-chinese-traditional-400-normal.woff';
+                // 載入繁體中文「新細名體 (MingLiU / 類似傳統明體風格)」或開源傳統明體字型
+                const fontUrl = 'https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-tc@4.5.1/files/noto-serif-tc-chinese-traditional-400-normal.woff';
                 const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
                 const customFont = await pdfDoc.embedFont(fontBytes);
 
@@ -128,17 +127,34 @@
                         }
                     } else {
                         const value = document.getElementById(`input-${index}`).value;
-                        if (value) {
-                            // 支援大範圍方塊自動換行
-                            page.drawText(value, {
-                                x: field.x + 4,
-                                y: targetY,
-                                size: 11,
-                                font: customFont,
-                                maxWidth: field.width - 8,
-                                lineHeight: 15,
-                            });
+                        if (!value) return;
+
+                        const fontSize = 11;
+                        const textWidth = customFont.widthOfTextAtSize(value, fontSize);
+
+                        let drawX = field.x + 4;
+                        let drawMaxWidth = undefined;
+
+                        // 根據不同的文字類型處理對齊與換行，絕不任意拆字
+                        if (field.type === 'center') {
+                            // 置中對齊
+                            drawX = field.x + (field.width - textWidth) / 2;
+                        } else if (field.type === 'right') {
+                            // 靠右對齊
+                            drawX = field.x + field.width - textWidth - 4;
+                        } else if (field.type === 'textarea') {
+                            // 多行自動換行
+                            drawMaxWidth = field.width - 8;
                         }
+
+                        page.drawText(value, {
+                            x: drawX,
+                            y: targetY,
+                            size: fontSize,
+                            font: customFont,
+                            maxWidth: drawMaxWidth,
+                            lineHeight: 15,
+                        });
                     }
                 });
 
