@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>訊息提示</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        pre {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 容器 -->
+    <div id="alert-container"></div>
+
+    <script>
+        // 定義各種狀態的樣式與內容設定
+        const alertConfigs = {
+            warning: {
+                bg: '#fef3c7',
+                color: '#78350f',
+                border: '#fde68a',
+                borderLeft: '#d97706',
+                shadow: 'rgba(217, 119, 6, 0.05), 0 10px 15px -3px rgba(217, 119, 6, 0.03)',
+                svgFill: '#d97706',
+                svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
+                textColor: '#92400e'
+            },
+            success: {
+                bg: '#f0fdf4',
+                color: '#166534',
+                border: '#bbf7d0',
+                borderLeft: '#16a34a',
+                shadow: 'rgba(22, 163, 74, 0.03), 0 10px 15px -3px rgba(22, 163, 74, 0.02)',
+                svgFill: '#16a34a',
+                svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z',
+                textColor: '#15803d'
+            },
+            error: {
+                bg: '#fef2f2',
+                color: '#991b1b',
+                border: '#fecaca',
+                borderLeft: '#dc2626',
+                shadow: 'rgba(220, 38, 38, 0.03), 0 10px 15px -3px rgba(220, 38, 38, 0.02)',
+                svgFill: '#dc2626',
+                svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
+                textColor: '#b91c1c'
+            },
+            info: {
+                bg: '#f0f9ff',
+                color: '#075985',
+                border: '#bae6fd',
+                borderLeft: '#0284c7',
+                shadow: 'rgba(2, 132, 199, 0.03), 0 10px 15px -3px rgba(2, 132, 199, 0.02)',
+                svgFill: '#0284c7',
+                svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
+                textColor: '#0369a1'
+            },
+            tips: {
+                bg: '#fef3c7',
+                color: '#78350f',
+                border: '#fde68a',
+                borderLeft: '#d97706',
+                shadow: 'rgba(217, 119, 6, 0.03), 0 10px 15px -3px rgba(217, 119, 6, 0.02)',
+                svgFill: '#d97706',
+                svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
+                textColor: '#92400e'
+            }
+        };
+
+        // 取得網址列參數
+        const urlParams = new URLSearchParams(window.location.search);
+        const titleText = urlParams.get('title');
+        const contentText = urlParams.get('content');
+        const statusKey = urlParams.get('status') ? urlParams.get('status').toLowerCase() : '';
+
+        const container = document.getElementById('alert-container');
+
+        // 檢查是否缺少必要資訊（title、content 或 status 其中一個沒帶，或者完全沒有參數）
+        if (!titleText || !contentText || !statusKey || !alertConfigs[statusKey]) {
+            // 返回 JSON 格式錯誤訊息
+            const errorObj = {
+                "error_code": "400",
+                "error": "Bad Request."
+            };
+            
+            // 如果希望網頁直接呈現 JSON 文字
+            container.innerHTML = `<pre>${JSON.stringify(errorObj, null, 4)}</pre>`;
+            
+            // 同時設定 HTTP 回應標頭（如果是透過後端，前端模擬的話主要是改變畫面的輸出格式）
+        } else {
+            // 正常渲染對應的樣式與內容
+            const config = alertConfigs[statusKey];
+
+            container.innerHTML = `
+                <div style="display: flex; align-items: flex-start; max-width: 500px; width: 100%; padding: 16px 20px; background-color: ${config.bg}; color: ${config.color}; border: 1px solid ${config.border}; border-left: 5px solid ${config.borderLeft}; border-radius: 12px; box-shadow: 0 4px 6px -1px ${config.shadow}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <!-- SVG 圖示 -->
+                    <svg style="width: 22px; height: 22px; fill: ${config.svgFill}; flex-shrink: 0; margin-right: 14px; margin-top: 2px;" viewBox="0 0 24 24">
+                        <path d="${config.svgPath}"/>
+                    </svg>
+                    <!-- 文字內容 -->
+                    <div style="flex-grow: 1;">
+                        <h4 style="font-size: 16px; font-weight: 700; margin: 0 0 4px 0; letter-spacing: 0.5px;">${titleText}</h4>
+                        <p style="font-size: 14px; line-height: 1.6; margin: 0; color: ${config.textColor};">${contentText}</p>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
